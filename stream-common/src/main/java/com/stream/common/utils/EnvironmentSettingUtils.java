@@ -7,6 +7,7 @@ import org.apache.flink.runtime.state.storage.FileSystemCheckpointStorage;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.concurrent.TimeUnit;
 
@@ -46,5 +47,13 @@ public class EnvironmentSettingUtils {
     }
 
     //keypoint s3a相关设置
-    public static config
+    public static Configuration getMinioConfiguration(){
+        Configuration configuration = new Configuration();
+        // 用于设置 AWS 的 Access Key ID，即用于唯一标识调用者身份的公钥部分
+        configuration.set("fs.s3a.access.key", "");
+        // 用于设置 AWS 的 Secret Access Key，即与 Access Key 配对的私钥部分
+        configuration.set("fs.s3a.secret.key", "");
+
+        return configuration;
+    }
 }
