@@ -2,6 +2,7 @@ package com.realtime.func;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.realtime.util.AsyncHbaseDimBaseDicFunc;
 import com.realtime.util.KafkaOffsetUtils;
 import com.realtime.util.SensitiveWordsUtils;
 import com.stream.common.utils.ConfigUtils;
@@ -9,6 +10,7 @@ import com.stream.common.utils.EnvironmentSettingUtils;
 import com.stream.common.utils.KafkaUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -21,6 +23,7 @@ import sun.reflect.misc.ConstructorUtil;
 import javax.security.auth.login.Configuration;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 
 //keypoint 评论数据的敏感词过滤
 public class DbusDBCommentFactData2Kafka {
@@ -76,23 +79,71 @@ public class DbusDBCommentFactData2Kafka {
                         }), "kafka_cdc_db_source"
         );
 
-        //过滤出订单主表
-        SingleOutputStreamOperator<JSONObject> filteredOrderInfoStream = kafkaCdcDbSource
-                .map(JSON::parseObject)
-                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("order_info"));
+        kafkaCdcDbSource.print();
+//        //过滤出订单主表
+//        SingleOutputStreamOperator<JSONObject> filteredOrderInfoStream = kafkaCdcDbSource
+//                .map(JSON::parseObject)
+//                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("order_info"));
+//
+//        //过滤出订单表,并且使用appraise分组
+//        //经过keyBy的流不直接支持 print()
+//        KeyedStream<JSONObject, String> filteredCommentInfoStream = kafkaCdcDbSource
+//                .map(JSON::parseObject)
+//                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("comment_info"))
+//                .keyBy(jsonObj -> jsonObj.getJSONObject("after").getString("appraise"));
+//
+//        //异步io到appraise对应的dic_name
+//        SingleOutputStreamOperator<JSONObject> enrichedStream = AsyncDataStream
+//                .unorderedWait(
+//                        filteredCommentInfoStream,
+//                        new AsyncHbaseDimBaseDicFunc(),
+//                        60,
+//                        TimeUnit.SECONDS,
+//                        1000
+//                );
+//
+//        //map操作生成新的jsonObj,用于存储提取和整理后的字段
+//        SingleOutputStreamOperator<JSONObject> orderCommentMap = enrichedStream.map(new RichMapFunction<JSONObject, JSONObject>() {
+//            @Override
+//            public JSONObject map(JSONObject jsonObject) throws Exception {
+//                //获取ts数据
+//                JSONObject jsonObj = new JSONObject();
+//                Long tsMs = jsonObj.getLong("ts_ms");
+//                //获取source中的数据
+//                JSONObject source = jsonObj.getJSONObject("source");
+//                String dbName = source.getString("db");
+//                String tableName = source.getString("table");
+//                String serverId = jsonObj.getString("server_id");
+//                // 当前 JsonObject 是否包含 "after" 字段（表示数据变更后的状态）
+//                if (jsonObj.containsKey("after")) {
+//                    JSONObject after = jsonObj.getJSONObject("after");
+//                    // 将基础信息字段放入新对象中,用于存储提取和整理后的字段
+//                    jsonObj.put("ts_ms", tsMs);
+//                    jsonObj.put("db", dbName);
+//                    jsonObj.put("table", tableName);
+//                    jsonObj.put("server_id", serverId);
+//                    // 从 after 对象中提取与评论相关的字段
+//                    jsonObj.put("appraise", after.getString("appraise"));
+//                    jsonObj.put("commentTxt", after.getString("comment_txt"));
+//                    jsonObj.put("op", jsonObj.getString("op"));
+//                    jsonObj.put("nick_name", jsonObj.getString("nick_name"));
+//                    // 提取时间戳和用户相关字段
+//                    jsonObj.put("create_time", after.getLong("create_time"));
+//                    jsonObj.put("user_id", after.getLong("user_id"));
+//                    jsonObj.put("sku_id", after.getLong("sku_id"));
+//                    jsonObj.put("id", after.getLong("id"));
+//                    jsonObj.put("spu_id", after.getLong("spu_id"));
+//                    jsonObj.put("order_id", after.getLong("order_id"));
+//                    // 附加维度信息字段
+//                    jsonObj.put("dic_name", after.getString("dic_name"));
+//                    // 返回整理好的 JSON 对象
+//                    return jsonObj;
+//                }
+//                return null;
+//            }
+//        });
+//        orderCommentMap.print();
 
-        //过滤出订单表,并且使用appraise分组
-        //经过keyBy的流不直接支持 print()
-        KeyedStream<JSONObject, String> filteredCommentInfoStream = kafkaCdcDbSource
-                .map(JSON::parseObject)
-                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("comment_info"))
-                .keyBy(jsonObj -> jsonObj.getJSONObject("after").getString("appraise"));
-
-        AsyncDataStream
-                .unorderedWait(
-                        filteredCommentInfoStream,
-                        new A
-                )
 
         //设置提交
         env.execute();

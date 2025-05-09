@@ -3,11 +3,11 @@ package com.stream.common.utils;
 import com.alibaba.fastjson.JSONObject;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
+
 import org.apache.hadoop.hbase.HConstants;
-import org.apache.hadoop.hbase.client.BufferedMutator;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.io.compress.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,5 +52,45 @@ public class HbaseUtils {
         }
         //将 Put 对象添加到 BufferedMutator 中
         mutator.mutate(put);
+    }
+
+    //hbase建表
+    public boolean createTable(String nameSpace,String tableName,String... columnFamily) throws Exception{
+        //如果表存在,返回true结束代码
+        boolean b = tableIsExists(tableName);
+        if (b) {
+            return true;
+        }
+        Admin admin = connection.getAdmin();
+        TableDescriptorBuilder tableDescriptorBuilder = TableDescriptorBuilder.newBuilder(TableName.valueOf(nameSpace,tableName));
+        if (columnFamily.length > 0) {
+            for (String s : columnFamily) {
+                ColumnFamilyDescriptor build = ColumnFamilyDescriptorBuilder.newBuilder(s.getBytes()).setCompressionType(Compression.Algorithm.SNAPPY).build();
+                System.err.println("构建表列族：" + s);
+                tableDescriptorBuilder.setColumnFamily(build);
+            }
+        } else {
+            ColumnFamilyDescriptor build = ColumnFamilyDescriptorBuilder.newBuilder("info".getBytes()).setCompressionType(Compression.Algorithm.SNAPPY).build();
+            System.err.println("构建表列族：info");
+            tableDescriptorBuilder.setColumnFamily(build);
+        }
+        TableDescriptor build = tableDescriptorBuilder
+                .build();
+        admin.createTable(build);
+        admin.close();
+        LOG.info("Create Table {}",tableName);
+        return tableIsExists(tableName);
+
+    }
+
+
+    //查看Hbase表是否存在
+    public boolean tableIsExists(String tableName) throws Exception{
+        Thread.sleep(1000);
+        Admin admin = connection.getAdmin();
+        boolean b = admin.tableExists(TableName.valueOf(tableName));
+        admin.close();
+        System.err.println("表"+tableName+(b?"存在":"不存在"));
+        return b;
     }
 }
