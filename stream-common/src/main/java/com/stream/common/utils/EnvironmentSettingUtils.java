@@ -3,6 +3,7 @@ package com.stream.common.utils;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.time.Time;
 import org.apache.flink.contrib.streaming.state.EmbeddedRocksDBStateBackend;
+import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.flink.runtime.state.storage.FileSystemCheckpointStorage;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
@@ -21,7 +22,9 @@ public class EnvironmentSettingUtils {
         // 设置状态后端为 RocksDB
         //HashMapStateBackend：将状态保存在 JVM 堆内存中，适合小状态场景；
         //EmbeddedRocksDBStateBackend：将状态保存在嵌入式 RocksDB 本地数据库中，支持非常大的状态并且默认做增量快照；
-        env.setStateBackend(new EmbeddedRocksDBStateBackend());
+//        env.setStateBackend(new EmbeddedRocksDBStateBackend());
+        // 替换为 HashMapStateBackend（无需 native 库）
+        env.setStateBackend(new HashMapStateBackend());
         // 设定语义模式，默认情况是 exactly_once
         CheckpointConfig config = env.getCheckpointConfig();
         config.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);

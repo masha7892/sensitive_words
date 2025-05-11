@@ -79,29 +79,37 @@ public class DbusDBCommentFactData2Kafka {
                         }), "kafka_cdc_db_source"
         );
 
-        kafkaCdcDbSource.print();
+//        kafkaCdcDbSource.print();
+
+
+
 //        //过滤出订单主表
-//        SingleOutputStreamOperator<JSONObject> filteredOrderInfoStream = kafkaCdcDbSource
-//                .map(JSON::parseObject)
-//                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("order_info"));
-//
+        SingleOutputStreamOperator<JSONObject> filteredOrderInfoStream = kafkaCdcDbSource
+                .map(JSON::parseObject)
+                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("order_info"));
+//        filteredOrderInfoStream.print();
+
+
+
 //        //过滤出订单表,并且使用appraise分组
 //        //经过keyBy的流不直接支持 print()
-//        KeyedStream<JSONObject, String> filteredCommentInfoStream = kafkaCdcDbSource
-//                .map(JSON::parseObject)
-//                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("comment_info"))
-//                .keyBy(jsonObj -> jsonObj.getJSONObject("after").getString("appraise"));
-//
+        KeyedStream<JSONObject, String> filteredCommentInfoStream = kafkaCdcDbSource
+                .map(JSON::parseObject)
+                .filter(jsonObj -> jsonObj.getJSONObject("source").getString("table").equals("comment_info"))
+                .keyBy(jsonObj -> jsonObj.getJSONObject("after").getString("appraise"));
+
 //        //异步io到appraise对应的dic_name
-//        SingleOutputStreamOperator<JSONObject> enrichedStream = AsyncDataStream
-//                .unorderedWait(
-//                        filteredCommentInfoStream,
-//                        new AsyncHbaseDimBaseDicFunc(),
-//                        60,
-//                        TimeUnit.SECONDS,
-//                        1000
-//                );
-//
+        SingleOutputStreamOperator<JSONObject> enrichedStream = AsyncDataStream
+                .unorderedWait(
+                        filteredCommentInfoStream,
+                        new AsyncHbaseDimBaseDicFunc(),
+                        60,
+                        TimeUnit.SECONDS,
+                        1000
+                );
+
+        enrichedStream.print();
+
 //        //map操作生成新的jsonObj,用于存储提取和整理后的字段
 //        SingleOutputStreamOperator<JSONObject> orderCommentMap = enrichedStream.map(new RichMapFunction<JSONObject, JSONObject>() {
 //            @Override
