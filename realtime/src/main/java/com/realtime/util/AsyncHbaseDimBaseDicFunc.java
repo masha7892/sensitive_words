@@ -51,9 +51,10 @@ public class AsyncHbaseDimBaseDicFunc extends RichAsyncFunction<JSONObject,JSONO
     @Override
     public void asyncInvoke(JSONObject input, ResultFuture<JSONObject> resultFuture) throws Exception {
         //读取appraise字段
-        String appraise = input.getJSONObject("after").getString("appraise");
+        String rowKey = input.getJSONObject("after").getString("appraise");
         //使用md5处理key,打散数据,避免数据倾斜
-        String rowKey = MD5Hash.getMD5AsHex(appraise.getBytes(StandardCharsets.UTF_8));
+        //找不到hbase数据,因为存入hbase的数据没有设置md5,注释掉这行
+//        String rowKey = MD5Hash.getMD5AsHex(appraise.getBytes(StandardCharsets.UTF_8));
         //检查缓存中是否存在该 RowKey 对应的 dic_name
         String cachedDicName = cache.getIfPresent(rowKey);
         //如果缓存中不存在，则使用 CompletableFuture 异步地从 HBase 中查询数据。

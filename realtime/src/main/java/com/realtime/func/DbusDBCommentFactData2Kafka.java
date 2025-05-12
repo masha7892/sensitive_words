@@ -10,6 +10,7 @@ import com.stream.common.utils.EnvironmentSettingUtils;
 import com.stream.common.utils.KafkaUtils;
 import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.AsyncDataStream;
@@ -17,6 +18,9 @@ import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction;
+import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import sun.reflect.misc.ConstructorUtil;
 
@@ -45,6 +49,9 @@ public class DbusDBCommentFactData2Kafka {
         //设置流环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         EnvironmentSettingUtils.defaultParameter(env);
+        //报错Insufficient number of network buffers: required 33, but only 2 available,设置并行度后解决,可能是默认并行度的问题
+        env.setParallelism(1);
+
 
 
 
@@ -108,50 +115,110 @@ public class DbusDBCommentFactData2Kafka {
                         1000
                 );
 
-        enrichedStream.print();
+//        enrichedStream.print();
 
-//        //map操作生成新的jsonObj,用于存储提取和整理后的字段
-//        SingleOutputStreamOperator<JSONObject> orderCommentMap = enrichedStream.map(new RichMapFunction<JSONObject, JSONObject>() {
-//            @Override
-//            public JSONObject map(JSONObject jsonObject) throws Exception {
-//                //获取ts数据
-//                JSONObject jsonObj = new JSONObject();
-//                Long tsMs = jsonObj.getLong("ts_ms");
-//                //获取source中的数据
-//                JSONObject source = jsonObj.getJSONObject("source");
-//                String dbName = source.getString("db");
-//                String tableName = source.getString("table");
-//                String serverId = jsonObj.getString("server_id");
-//                // 当前 JsonObject 是否包含 "after" 字段（表示数据变更后的状态）
-//                if (jsonObj.containsKey("after")) {
-//                    JSONObject after = jsonObj.getJSONObject("after");
-//                    // 将基础信息字段放入新对象中,用于存储提取和整理后的字段
-//                    jsonObj.put("ts_ms", tsMs);
-//                    jsonObj.put("db", dbName);
-//                    jsonObj.put("table", tableName);
-//                    jsonObj.put("server_id", serverId);
-//                    // 从 after 对象中提取与评论相关的字段
-//                    jsonObj.put("appraise", after.getString("appraise"));
-//                    jsonObj.put("commentTxt", after.getString("comment_txt"));
-//                    jsonObj.put("op", jsonObj.getString("op"));
-//                    jsonObj.put("nick_name", jsonObj.getString("nick_name"));
-//                    // 提取时间戳和用户相关字段
-//                    jsonObj.put("create_time", after.getLong("create_time"));
-//                    jsonObj.put("user_id", after.getLong("user_id"));
-//                    jsonObj.put("sku_id", after.getLong("sku_id"));
-//                    jsonObj.put("id", after.getLong("id"));
-//                    jsonObj.put("spu_id", after.getLong("spu_id"));
-//                    jsonObj.put("order_id", after.getLong("order_id"));
-//                    // 附加维度信息字段
-//                    jsonObj.put("dic_name", after.getString("dic_name"));
-//                    // 返回整理好的 JSON 对象
-//                    return jsonObj;
-//                }
-//                return null;
-//            }
-//        });
+//        //map操作生成新的jsonObj,用于存储comment_info提取和整理后的字段
+        SingleOutputStreamOperator<JSONObject> orderCommentMap = enrichedStream.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject  jsonObj) throws Exception {
+                //获取ts数据
+                JSONObject jsonObject = new JSONObject();
+                Long tsMs = jsonObj.getLong("ts_ms");
+                //获取source中的数据
+                JSONObject source = jsonObj.getJSONObject("source");
+                String dbName = source.getString("db");
+                String tableName = source.getString("table");
+                String serverId = source.getString("server_id");
+                // 当前 JsonObj 是否包含 "after" 字段（表示数据变更后的状态）
+                if (jsonObj.containsKey("after")) {
+                    JSONObject after = jsonObj.getJSONObject("after");
+                    // 将基础信息字段放入新对象中,用于存储提取和整理后的字段
+                    jsonObject.put("ts_ms", tsMs);
+                    jsonObject.put("db", dbName);
+                    jsonObject.put("table", tableName);
+                    jsonObject.put("server_id", serverId);
+                    // 从 after 对象中提取与评论相关的字段
+                    jsonObject.put("appraise", after.getString("appraise"));
+                    jsonObject.put("commentTxt", after.getString("comment_txt"));
+                    jsonObject.put("op", jsonObj.getString("op"));
+                    jsonObject.put("nick_name", after.getString("nick_name"));
+                    // 提取时间戳和用户相关字段
+                    jsonObject.put("create_time", after.getLong("create_time"));
+                    jsonObject.put("user_id", after.getLong("user_id"));
+                    jsonObject.put("sku_id", after.getLong("sku_id"));
+                    jsonObject.put("id", after.getLong("id"));
+                    jsonObject.put("spu_id", after.getLong("spu_id"));
+                    jsonObject.put("order_id", after.getLong("order_id"));
+                    // 附加维度信息字段
+                    jsonObject.put("dic_name", after.getString("dic_name"));
+                    // 返回整理好的 JSON 对象
+                    return jsonObject;
+                }
+                return null;
+            }
+        });
 //        orderCommentMap.print();
 
+
+        //处理订单主表的数据
+        SingleOutputStreamOperator<JSONObject> orderInfoMapDs = filteredOrderInfoStream.map(new MapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject inputJsonObj) throws Exception {
+                //有op字段,则使用op,没有则使用默认值
+                String op = inputJsonObj.containsKey("op")
+                        ? inputJsonObj.getString("op")
+                        : "没有op字段";
+                String ts_ms = inputJsonObj.containsKey("ts_ms")
+                        ? inputJsonObj.getString("ts_ms")
+                        : "没有ts字段";
+                JSONObject dataObj;
+                //这里当没有before字段时,inputJsonObj.getJSONObject("before")就会报空指针异常
+                if (inputJsonObj.containsKey("after") && inputJsonObj.getJSONObject("after") != null && !inputJsonObj.getJSONObject("after").isEmpty()) {
+                    dataObj = inputJsonObj.getJSONObject("after");
+                } else if (inputJsonObj.containsKey("before")  && inputJsonObj.getJSONObject("before") != null && !inputJsonObj.getJSONObject("before").isEmpty()){
+                    dataObj = inputJsonObj.getJSONObject("before");
+                }else {
+                    dataObj  = new JSONObject();
+                }
+                JSONObject resultJsonObj = new JSONObject();
+                resultJsonObj.put("op", op);
+                resultJsonObj.put("ts_ms", ts_ms);
+                resultJsonObj.putAll(dataObj);
+                return resultJsonObj;
+            }
+        });
+//        orderInfoMapDs.print();
+
+
+        //评论表和订单表分组,intervalJoin 只能作用于 KeyedStream
+        KeyedStream<JSONObject, String> keyedOrderCommentStream = orderCommentMap.keyBy(data -> data.getString("order_id"));
+        KeyedStream<JSONObject, String> keyedOrderInfoStream = orderInfoMapDs.keyBy(data -> data.getString("id"));
+
+        //评论表和订单表关联,窗口大小为1分钟,允许迟到1分钟,
+        SingleOutputStreamOperator<JSONObject> orderMsgAllDs = keyedOrderCommentStream.intervalJoin(keyedOrderInfoStream)
+                .between(Time.minutes(-1), Time.minutes(1))
+                .process(new ProcessJoinFunction<JSONObject, JSONObject, JSONObject>() {
+                    @Override
+                    public void processElement(JSONObject comment, JSONObject info, ProcessJoinFunction<JSONObject, JSONObject, JSONObject>.Context context, Collector<JSONObject> collector) throws Exception {
+                        //.clone() 创建了一个 JSONObject 对象的浅拷贝，目的是避免对原始 comment 对象的直接修改
+                        //由于 clone() 方法返回的是 Object 类型，因此需要显式地将其转换为 JSONObject 类型
+                        JSONObject cloneComment = (JSONObject) comment.clone();
+                        for (String key : info.keySet()) {
+                            cloneComment.put("info_" + key, info.get(key));
+                        }
+                        collector.collect(cloneComment);
+                    }
+                });
+//        orderMsgAllDs.print();
+
+        // 通过AI 生成评论数据，`Deepseek 7B` 模型即可
+        orderMsgAllDs.map(new RichMapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                jsonObject.put("comment_txt","A");
+                return null;
+            }
+        });
 
         //设置提交
         env.execute();

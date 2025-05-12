@@ -5,3 +5,4 @@ env=dev
 #kafka
 kafka.bootstrap.servers=cdh01:9092,cdh02:9092,cdh03:9092
 kafka.cdc.db.topic=ods_initial
+silicon.api.token=
