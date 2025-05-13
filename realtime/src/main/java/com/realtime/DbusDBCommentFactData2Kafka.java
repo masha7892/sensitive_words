@@ -1,7 +1,8 @@
-package com.realtime.func;
+package com.realtime;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.realtime.stream.CommonGenerateTempLate;
 import com.realtime.util.AsyncHbaseDimBaseDicFunc;
 import com.realtime.util.KafkaOffsetUtils;
 import com.realtime.util.SensitiveWordsUtils;
@@ -12,6 +13,7 @@ import lombok.SneakyThrows;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
@@ -20,16 +22,19 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.table.utils.DateTimeUtils;
 import org.apache.flink.util.Collector;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import sun.reflect.misc.ConstructorUtil;
 
-import javax.security.auth.login.Configuration;
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-//keypoint 评论数据的敏感词过滤
+//keypoint 评论数据的敏感词过滤,这段代码主要是ai生成评论,替换原有评论,然后随机添加敏感词到评论中,发送到kafka
 public class DbusDBCommentFactData2Kafka {
     //读取文件数据,按行存入集合
     private static final ArrayList<String> sensitiveWordsLists;
@@ -212,14 +217,51 @@ public class DbusDBCommentFactData2Kafka {
 //        orderMsgAllDs.print();
 
         // 通过AI 生成评论数据，`Deepseek 7B` 模型即可
-        orderMsgAllDs.map(new RichMapFunction<JSONObject, JSONObject>() {
+        SingleOutputStreamOperator<JSONObject> supplementDataMap = orderMsgAllDs.map(new RichMapFunction<JSONObject, JSONObject>() {
             @Override
             public JSONObject map(JSONObject jsonObject) throws Exception {
-                jsonObject.put("comment_txt","A");
-                return null;
+                jsonObject.put("commentTxt", CommonGenerateTempLate.GenerateComment(jsonObject.getString("dic_name"), jsonObject.getString("info_trade_body")));
+                return jsonObject;
+            }
+        });
+//        supplementDataMap.print();
+
+        SingleOutputStreamOperator<JSONObject> suppleMapDs = supplementDataMap.map(new RichMapFunction<JSONObject, JSONObject>() {
+            //初始化一个随机数实例
+            private transient Random random;
+
+            @Override
+            public void open(Configuration parameters) throws Exception {
+                random = new Random();
+            }
+
+            //生成一个 0 到 1 之间的随机数，如果该数小于 0.2（即 20% 的概率），则：
+            //从 sensitiveWordsLists 中随机选取一个敏感词。
+            //将该敏感词追加到原有的 commentTxt 字段中，使用逗号分隔。
+            //输出修改后的 JSONObject 到标准错误流，便于调试。
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                if (random.nextDouble() < 0.2) {
+                    jsonObject.put("commentTxt", jsonObject.getString("commentTxt") + "," + SensitiveWordsUtils.getRandomElement(sensitiveWordsLists));
+                    System.err.println("change commentTxt: " + jsonObject);
+                }
+                return jsonObject;
             }
         });
 
+//        suppleMapDs.print();
+
+        //在每个 JSONObject 中添加一个新的字段 ds，其值为 ts_ms 字段表示的时间戳转换为的日期字符串，格式为 yyyyMMdd
+        SingleOutputStreamOperator<JSONObject> suppleTimeFieldDs = suppleMapDs.map(new RichMapFunction<JSONObject, JSONObject>() {
+            @Override
+            public JSONObject map(JSONObject jsonObject) throws Exception {
+                jsonObject.put("ds", new SimpleDateFormat("yyyyMMdd").format(new Date(jsonObject.getLong("ts_ms"))));
+                return jsonObject;
+            }
+        });
+        suppleTimeFieldDs.print();
+
+//        suppleTimeFieldDs.map(js ->js.toJSONString()).sinkTo(KafkaUtils.buildKafkaSink(kafka_botstrap_servers,kafka_db_fact_comment_topic));
         //设置提交
         env.execute();
 

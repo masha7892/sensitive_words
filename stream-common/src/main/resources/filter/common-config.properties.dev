@@ -5,4 +5,11 @@ env=dev
 #kafka
 kafka.bootstrap.servers=cdh01:9092,cdh02:9092,cdh03:9092
 kafka.cdc.db.topic=ods_initial
-silicon.api.token=
+silicon.api.token=sk-sokymmibgcshgvxxoprnzyfdxadwuzzotmzrdvykzzqzdqcz
+kafka.db.fact.comment.topic=factComment
+kafka.result.sensitive.words.topic=sensitiveWordsTopic
+redis.host=cdh03
+redis.port=6379
+redis.blacklist.db=0
+redis.user=
+redis.pwd=123456

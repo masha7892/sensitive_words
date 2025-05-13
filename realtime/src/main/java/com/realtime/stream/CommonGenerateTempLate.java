@@ -14,6 +14,7 @@ public class CommonGenerateTempLate {
     public static String GenerateComment(String comment,String productName){
         if (comment.equals(COMMENT)){
             return generateBadReview(
+                    //替换字符
                     String.format(COMMENT_TEMPLATE,COMMENT, productName, "攻击性拉满,使用脏话"),
                     API_TOKEN
             );
