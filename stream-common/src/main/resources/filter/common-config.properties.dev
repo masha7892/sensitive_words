@@ -8,6 +8,16 @@ kafka.cdc.db.topic=ods_initial
 silicon.api.token=sk-sokymmibgcshgvxxoprnzyfdxadwuzzotmzrdvykzzqzdqcz
 kafka.db.fact.comment.topic=factComment
 kafka.result.sensitive.words.topic=sensitiveWordsTopic
+kafka.page.topic=dwd_traffic_page
+
+
+#mysql
+mysql.url=jdbc:mysql://cdh03:3306/e_commerce?useSSL=false
+mysql.user=root
+mysql.pwd=root
+
+
+#redis
 redis.host=cdh03
 redis.port=6379
 redis.blacklist.db=0
