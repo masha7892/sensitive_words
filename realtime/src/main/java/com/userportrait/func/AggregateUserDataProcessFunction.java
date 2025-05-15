@@ -43,7 +43,7 @@ public class AggregateUserDataProcessFunction extends KeyedProcessFunction<Strin
         // 更新PV,当pv没有值时,则更新为1,否则+1
         Long pv = pvState.value() == null ? 1L : pvState.value() + 1;
         pvState.update(pv);
-
+//{"uid":"183","search_item":"小米","deviceInfo":{"ar":"20","uid":"183","os":"Android","ch":"xiaomi","md":"vivo x90","vc":"v2.1.134","ba":"vivo"},"ts":1746757084000}
         // 提取设备信息和搜索词
         JSONObject deviceInfo = jsonObject.getJSONObject("deviceInfo");
         String os = deviceInfo.getString("os");
@@ -70,7 +70,7 @@ public class AggregateUserDataProcessFunction extends KeyedProcessFunction<Strin
         output.put("md", String.join(",", getField("md")));
         output.put("ba", String.join(",", getField("ba")));
         output.put("search_item", String.join(",", getField("search_item")));
-
+        output.put("ts", jsonObject.getLong("ts"));
         collector.collect(output);
     }
 
