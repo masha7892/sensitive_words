@@ -1,1 +1,1 @@
-熟悉 Hadoop 生态（HDFS/MapReduce/YARN），具备分布式存储、并行计算及资源调度的实践经验；
+今日文档
